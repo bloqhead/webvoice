@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOXEL — Web Audio Voice Synth</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">VOXEL</div>
+    <div class="tagline">
+      character voice synthesis<br>
+      <em>web audio api only</em> · zero libraries
+    </div>
+  </header>
+
+  <!-- Voice selector -->
+  <div class="panel" id="voiceSelectorPanel">
+    <span class="panel-label">voice character</span>
+    <div class="voice-grid" id="voiceGrid">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="panel">
+    <span class="panel-label">input</span>
+    <div class="input-row">
+      <input type="text" id="wordInput" placeholder="type something..." maxlength="120" autocomplete="off" spellcheck="false">
+      <button class="speak-btn" id="speakBtn" onclick="speakText()">speak</button>
+    </div>
+  </div>
+
+  <!-- Phoneme strip -->
+  <div class="panel">
+    <span class="panel-label">phoneme sequence</span>
+    <div class="phoneme-display" id="phonemeDisplay">
+      <span class="awaiting">awaiting input</span>
+    </div>
+  </div>
+
+  <!-- Scope -->
+  <div class="panel">
+    <span class="panel-label">waveform</span>
+    <canvas id="scope"></canvas>
+  </div>
+
+  <!-- Voice params -->
+  <div class="panel" id="paramsPanel">
+    <span class="panel-label">voice parameters</span>
+    <div class="params-desc" id="voiceDesc"></div>
+    <div class="settings-grid" id="settingsGrid">
+      <!-- populated per-voice -->
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-dot ready" id="statusDot"></div>
+    <span id="statusText">select a voice and type something</span>
+    <div class="phoneme-legend">
+      <div class="legend-item"><div class="legend-box vowel"></div><span>vowel</span></div>
+      <div class="legend-item"><div class="legend-box consonant"></div><span>consonant</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="phonemes.js"></script>
+<script src="synth.js"></script>
+<script src="voices.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>
