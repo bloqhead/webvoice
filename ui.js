@@ -1,268 +1,222 @@
 /**
- * ui.js
- * UI rendering, oscilloscope, phoneme animation, event handling.
+ * ui.js — WebVoice UI controller
+ * Runs as an IIFE after all scripts have loaded (scripts are at end of <body>)
  */
 
+let activeVoice = VOICES.tomoP;
 let isSpeaking = false;
-let scopeAnimId = null;
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  renderVoiceGrid();
-  setVoice('tomoP');
-  updateVoiceUI();
-  initScope();
+function setVoiceColor(color) {
+  document.documentElement.style.setProperty('--voice-color', color);
+}
 
-  document.getElementById('wordInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') speakText();
-  });
-});
+function setVoice(id) {
+  activeVoice = VOICES[id];
+  setVoiceColor(activeVoice.color);
+}
 
-// ── Voice Grid ────────────────────────────────────────────────────────────────
 function renderVoiceGrid() {
   const grid = document.getElementById('voiceGrid');
   grid.innerHTML = '';
-
   Object.values(VOICES).forEach(voice => {
     const card = document.createElement('div');
     card.className = 'voice-card' + (voice.id === activeVoice.id ? ' active' : '');
-    card.style.setProperty('--card-color', voice.color);
-    card.dataset.voiceId = voice.id;
-    card.innerHTML = `
-      <div class="vc-icon">${voice.icon}</div>
-      <div class="vc-name">${voice.name}</div>
-      <div class="vc-desc">${voice.description}</div>
-    `;
+    card.innerHTML = '<div class="vc-icon">' + voice.icon + '</div>' +
+      '<div class="vc-name">' + voice.name + '</div>' +
+      '<div class="vc-desc">' + voice.description + '</div>';
     card.addEventListener('click', () => {
       document.querySelectorAll('.voice-card').forEach(c => c.classList.remove('active'));
       card.classList.add('active');
       setVoice(voice.id);
-      updateVoiceUI();
-      setStatus('ready', `voice: ${voice.name}`);
+      renderParamsPanel();
+      setStatus('ready', 'voice: ' + voice.name);
     });
     grid.appendChild(card);
   });
 }
 
-// ── Voice params panel ────────────────────────────────────────────────────────
-function updateVoiceUI() {
+function renderParamsPanel() {
   const voice = activeVoice;
   document.getElementById('voiceDesc').textContent = voice.description;
-
   const grid = document.getElementById('settingsGrid');
   grid.innerHTML = '';
 
   const params = [
-    { key: 'pitch',        label: 'pitch',       min: 60,  max: 600, step: 1,   fmt: v => `${v} hz`,            suffix: ' hz' },
-    { key: 'jitter',       label: 'roughness',   min: 0,   max: 1,   step: 0.01,fmt: v => `${Math.round(v*100)}%`, suffix: '' },
-    { key: 'breathiness',  label: 'breathiness', min: 0,   max: 1,   step: 0.01,fmt: v => `${Math.round(v*100)}%`, suffix: '' },
-    { key: 'vowelDurMult', label: 'vowel length',min: 0.3, max: 2.5, step: 0.05,fmt: v => `${parseFloat(v).toFixed(2)}×`, suffix: '' },
+    { key: 'pitch',        label: 'pitch',        min: 60,  max: 600, step: 1,    fmt: function(v) { return Math.round(v) + ' hz'; } },
+    { key: 'jitter',       label: 'roughness',    min: 0,   max: 1,   step: 0.01, fmt: function(v) { return Math.round(v * 100) + '%'; } },
+    { key: 'breathiness',  label: 'breathiness',  min: 0,   max: 1,   step: 0.01, fmt: function(v) { return Math.round(v * 100) + '%'; } },
+    { key: 'vowelDurMult', label: 'vowel length', min: 0.3, max: 2.5, step: 0.05, fmt: function(v) { return parseFloat(v).toFixed(2) + 'x'; } },
   ];
 
-  params.forEach(({ key, label, min, max, step, fmt }) => {
-    const val = voice[key] ?? 0;
-    const row = document.createElement('div');
+  params.forEach(function(param) {
+    var key = param.key, label = param.label, min = param.min,
+        max = param.max, step = param.step, fmt = param.fmt;
+    var val = voice[key] != null ? voice[key] : 0;
+    var row = document.createElement('div');
     row.className = 'knob-row';
-    const valId = `kv-${key}`;
 
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'knob-label';
-    const valSpan = document.createElement('span');
-    valSpan.className = 'knob-value';
-    valSpan.id = valId;
-    valSpan.textContent = fmt(val);
-    labelSpan.textContent = label + ' ';
-    labelSpan.appendChild(valSpan);
+    var labelEl = document.createElement('span');
+    labelEl.className = 'knob-label';
+    labelEl.textContent = label + ' ';
 
-    const slider = document.createElement('input');
+    var valEl = document.createElement('span');
+    valEl.className = 'knob-value';
+    valEl.textContent = fmt(val);
+    labelEl.appendChild(valEl);
+
+    var slider = document.createElement('input');
     slider.type = 'range';
-    slider.min = min;
-    slider.max = max;
-    slider.step = step;
-    slider.value = val;
-    slider.addEventListener('input', () => {
-      const v = parseFloat(slider.value);
-      activeVoice[key] = v;
-      valSpan.textContent = fmt(v);
+    slider.min = min; slider.max = max; slider.step = step; slider.value = val;
+    slider.addEventListener('input', function() {
+      activeVoice[key] = parseFloat(slider.value);
+      valEl.textContent = fmt(slider.value);
     });
 
-    row.appendChild(labelSpan);
+    row.appendChild(labelEl);
     row.appendChild(slider);
     grid.appendChild(row);
   });
+}
 
-// ── Speak ─────────────────────────────────────────────────────────────────────
-window.speakText = function() {
-  if (isSpeaking) return;
-
-  const text = document.getElementById('wordInput').value.trim();
-  if (!text) return;
-
-  SynthEngine.getCtx(); // ensure ctx started (must be from user gesture)
-
-  const voice = activeVoice;
-  const phonemeSeq = textToPhonemes(text);
-  renderPhonemeDisplay(phonemeSeq);
-
-  // Base durations in seconds (voice multipliers applied per-type)
-  const BASE_VOWEL = 0.16;
-  const BASE_CON   = 0.10;
-  const BASE_SPACE = 0.11;
-
-  let t = SynthEngine.currentTime() + 0.06;
-  const schedule = [];
-
-  phonemeSeq.forEach(({ phoneme }) => {
-    if (phoneme === ' ') {
-      const dur = BASE_SPACE * (voice.spaceDurMult || 1);
-      schedule.push({ phoneme, startTime: t, duration: dur });
-      t += dur;
-      return;
-    }
-    const isVowel = phoneme in VOWELS;
-    const conDef = CONSONANTS[phoneme];
-    let dur;
-    if (isVowel) {
-      dur = BASE_VOWEL * (voice.vowelDurMult || 1.0);
-    } else if (conDef) {
-      dur = conDef.dur * (voice.consonantDurMult || 1.0);
-    } else {
-      dur = BASE_CON;
-    }
-    schedule.push({ phoneme, startTime: t, duration: dur });
-    // Slight coarticulation overlap
-    t += dur * 0.82;
-  });
-
-  const totalDur = (t - SynthEngine.currentTime() + 0.15) * 1000;
-
-  // Schedule all phonemes
-  schedule.forEach(({ phoneme, startTime, duration }) => {
-    if (phoneme === ' ') return;
-    SynthEngine.schedulePhoneme(phoneme, startTime, duration, voice);
-  });
-
-  // Animate chips
-  animateChips(schedule, phonemeSeq);
-
-  // UI state
-  isSpeaking = true;
-  document.getElementById('speakBtn').classList.add('speaking');
-  setStatus('active', `speaking · ${voice.name} · ${phonemeSeq.filter(p => p.phoneme !== ' ').length} phonemes`);
-
-  setTimeout(() => {
-    isSpeaking = false;
-    document.getElementById('speakBtn').classList.remove('speaking');
-    setStatus('ready', `done · ${voice.name}`);
-  }, totalDur);
-};
-
-// ── Phoneme display ───────────────────────────────────────────────────────────
-function renderPhonemeDisplay(phonemeSeq) {
-  const container = document.getElementById('phonemeDisplay');
-  container.innerHTML = '';
-  phonemeSeq.forEach(({ phoneme }) => {
-    const chip = document.createElement('span');
+function renderPhonemeDisplay(seq) {
+  var el = document.getElementById('phonemeDisplay');
+  el.innerHTML = '';
+  seq.forEach(function(item) {
+    var phoneme = item.phoneme;
+    var chip = document.createElement('span');
     if (phoneme === ' ') {
       chip.className = 'phoneme-chip space';
       chip.textContent = '·';
-    } else if (phoneme in VOWELS) {
+    } else if (VOWELS[phoneme]) {
       chip.className = 'phoneme-chip vowel';
       chip.textContent = phoneme;
     } else {
       chip.className = 'phoneme-chip consonant';
       chip.textContent = phoneme;
     }
-    container.appendChild(chip);
+    el.appendChild(chip);
   });
 }
 
-function animateChips(schedule, phonemeSeq) {
-  const chips = Array.from(document.querySelectorAll('.phoneme-chip'));
-  const now = SynthEngine.currentTime();
-
-  schedule.forEach(({ phoneme, startTime, duration }, i) => {
-    const chip = chips[i];
-    if (!chip || phoneme === ' ') return;
-    const delayMs = (startTime - now) * 1000;
-    setTimeout(() => chip.classList.add('active'), delayMs);
-    setTimeout(() => chip.classList.remove('active'), delayMs + duration * 1000);
+function animateChips(schedule, nowTime) {
+  var chips = Array.from(document.querySelectorAll('.phoneme-chip'));
+  schedule.forEach(function(item, i) {
+    if (item.phoneme === ' ' || !chips[i]) return;
+    var ms = (item.startTime - nowTime) * 1000;
+    setTimeout(function() { chips[i] && chips[i].classList.add('active'); }, Math.max(0, ms));
+    setTimeout(function() { chips[i] && chips[i].classList.remove('active'); }, Math.max(0, ms + item.duration * 1000));
   });
 }
 
-// ── Oscilloscope ──────────────────────────────────────────────────────────────
+function speakText() {
+  if (isSpeaking) return;
+  var text = document.getElementById('wordInput').value.trim();
+  if (!text) return;
+
+  SynthEngine.getCtx();
+  var voice = activeVoice;
+  var seq = textToPhonemes(text);
+  renderPhonemeDisplay(seq);
+
+  var BASE_V = 0.16, BASE_C = 0.10, BASE_SP = 0.11;
+  var t = SynthEngine.currentTime() + 0.06;
+  var schedule = [];
+
+  seq.forEach(function(item) {
+    var phoneme = item.phoneme;
+    var dur;
+    if (phoneme === ' ') {
+      dur = BASE_SP * (voice.spaceDurMult || 1.0);
+    } else if (VOWELS[phoneme]) {
+      dur = BASE_V * (voice.vowelDurMult || 1.0);
+    } else {
+      var def = CONSONANTS[phoneme];
+      dur = def ? def.dur * (voice.consonantDurMult || 1.0) : BASE_C;
+    }
+    schedule.push({ phoneme: phoneme, startTime: t, duration: dur });
+    t += dur * 0.83;
+  });
+
+  schedule.forEach(function(item) {
+    if (item.phoneme !== ' ') SynthEngine.schedulePhoneme(item.phoneme, item.startTime, item.duration, voice);
+  });
+
+  var nowTime = SynthEngine.currentTime();
+  animateChips(schedule, nowTime);
+
+  var totalMs = (t - nowTime + 0.2) * 1000;
+  isSpeaking = true;
+  document.getElementById('speakBtn').classList.add('speaking');
+  setStatus('active', 'speaking · ' + voice.name + ' · ' + seq.filter(function(p) { return p.phoneme !== ' '; }).length + ' phonemes');
+
+  setTimeout(function() {
+    isSpeaking = false;
+    document.getElementById('speakBtn').classList.remove('speaking');
+    setStatus('ready', 'done · ' + voice.name);
+  }, totalMs);
+}
+
+function setStatus(state, msg) {
+  document.getElementById('statusText').textContent = msg;
+  document.getElementById('statusDot').className = 'status-dot ' + state;
+}
+
 function initScope() {
-  const canvas = document.getElementById('scope');
-  const c = canvas.getContext('2d');
-
+  var canvas = document.getElementById('scope');
+  var c = canvas.getContext('2d');
   function resize() {
     canvas.width = canvas.offsetWidth * devicePixelRatio;
     canvas.height = canvas.offsetHeight * devicePixelRatio;
   }
   resize();
   window.addEventListener('resize', resize);
-
   function frame() {
-    scopeAnimId = requestAnimationFrame(frame);
-    const W = canvas.width, H = canvas.height;
-    const analyser = SynthEngine.getAnalyser();
-
-    c.clearRect(0, 0, W, H);
+    requestAnimationFrame(frame);
+    var W = canvas.width, H = canvas.height;
     c.fillStyle = '#0a0c0f';
     c.fillRect(0, 0, W, H);
-
-    // Grid lines
-    c.strokeStyle = '#1e2830';
-    c.lineWidth = 1;
-    for (let x = 0; x <= W; x += W / 8) {
+    c.strokeStyle = '#1e2830'; c.lineWidth = 1;
+    for (var x = 0; x <= W; x += W / 8) {
       c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke();
     }
     c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
-
+    var analyser = SynthEngine.getAnalyser();
     if (!analyser) {
-      drawFlatline(c, W, H);
+      c.strokeStyle = '#1e3828'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
       return;
     }
-
-    const buf = new Uint8Array(analyser.frequencyBinCount);
+    var buf = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteTimeDomainData(buf);
-
-    // Check if signal is active (not silence)
-    const maxVal = Math.max(...buf);
-    const active = maxVal > 130;
-
-    const color = activeVoice ? activeVoice.color : '#00ff9f';
-
-    c.strokeStyle = active ? color : '#1e4030';
-    c.shadowColor = active ? color : 'transparent';
-    c.shadowBlur = active ? 10 : 0;
-    c.lineWidth = active ? 2 : 1.5;
+    var peak = 0;
+    for (var j = 0; j < buf.length; j++) peak = Math.max(peak, buf[j]);
+    var hot = peak > 130;
+    var col = activeVoice ? activeVoice.color : '#00ff9f';
+    c.strokeStyle = hot ? col : '#1e3828';
+    c.shadowColor = hot ? col : 'transparent';
+    c.shadowBlur = hot ? 10 : 0;
+    c.lineWidth = hot ? 2 : 1.5;
     c.beginPath();
-
-    for (let i = 0; i < buf.length; i++) {
-      const x = (i / buf.length) * W;
-      const y = ((buf[i] / 128) - 1) * (H * 0.44) + H / 2;
-      i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+    for (var i = 0; i < buf.length; i++) {
+      var px = (i / buf.length) * W;
+      var py = ((buf[i] / 128) - 1) * H * 0.44 + H / 2;
+      i === 0 ? c.moveTo(px, py) : c.lineTo(px, py);
     }
     c.stroke();
     c.shadowBlur = 0;
   }
-
   frame();
 }
 
-function drawFlatline(c, W, H) {
-  c.strokeStyle = '#1e4030';
-  c.lineWidth = 1.5;
-  c.beginPath();
-  c.moveTo(0, H / 2);
-  c.lineTo(W, H / 2);
-  c.stroke();
-}
-
-// ── Status ─────────────────────────────────────────────────────────────────────
-function setStatus(state, msg) {
-  document.getElementById('statusText').textContent = msg;
-  const dot = document.getElementById('statusDot');
-  dot.className = 'status-dot ' + state;
-}
+// Boot — runs immediately since scripts are at end of <body>
+(function() {
+  setVoiceColor(activeVoice.color);
+  renderVoiceGrid();
+  renderParamsPanel();
+  initScope();
+  setStatus('ready', 'select a voice and type something');
+  document.getElementById('speakBtn').addEventListener('click', speakText);
+  document.getElementById('wordInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') speakText();
+  });
+})();

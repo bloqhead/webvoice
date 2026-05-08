@@ -54,7 +54,7 @@ header {
 
 .logo {
   font-family: 'VT323', monospace;
-  font-size: 4rem;
+  font-size: 2.8rem;
   color: var(--accent);
   text-shadow: var(--glow), 0 0 40px #00ff9f33;
   letter-spacing: 0.1em;
@@ -356,3 +356,19 @@ body.voice-glados .logo { color: #ff6b6b; text-shadow: 0 0 12px #ff6b6b66, 0 0 4
 
 /* ── Tomodachi specifics ── */
 body.voice-tomo { --bg: #080d0e; }
+
+/* Voice color dynamic theming */
+:root { --voice-color: #00ff9f; }
+
+.voice-card:hover { background: color-mix(in srgb, var(--voice-color) 5%, var(--bg)); }
+.voice-card.active {
+  border-color: var(--voice-color) !important;
+  background: color-mix(in srgb, var(--voice-color) 8%, var(--bg)) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--voice-color) 35%, transparent) !important;
+}
+.voice-card.active .vc-name { color: var(--voice-color) !important; text-shadow: 0 0 8px var(--voice-color); }
+#wordInput { color: var(--voice-color); caret-color: var(--voice-color); }
+#wordInput:focus { border-color: var(--voice-color); box-shadow: 0 0 10px color-mix(in srgb, var(--voice-color) 35%, transparent); }
+.speak-btn { border-color: var(--voice-color); color: var(--voice-color); }
+.speak-btn:hover { box-shadow: 0 0 12px color-mix(in srgb, var(--voice-color) 45%, transparent); }
+.phoneme-chip.active { border-color: var(--voice-color) !important; border-style: solid !important; color: var(--voice-color); background: color-mix(in srgb, var(--voice-color) 10%, transparent); box-shadow: 0 0 7px color-mix(in srgb, var(--voice-color) 40%, transparent); }
