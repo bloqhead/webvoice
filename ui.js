@@ -64,30 +64,32 @@ function updateVoiceUI() {
     const row = document.createElement('div');
     row.className = 'knob-row';
     const valId = `kv-${key}`;
-    row.innerHTML = `
-      <span class="knob-label">${label} <span class="knob-value" id="${valId}">${fmt(val)}</span></span>
-      <input type="range" min="${min}" max="${max}" step="${step}" value="${val}"
-             oninput="liveParam('${key}', this.value, '${valId}', ${JSON.stringify(fmt.toString())})">
-    `;
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'knob-label';
+    const valSpan = document.createElement('span');
+    valSpan.className = 'knob-value';
+    valSpan.id = valId;
+    valSpan.textContent = fmt(val);
+    labelSpan.textContent = label + ' ';
+    labelSpan.appendChild(valSpan);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = min;
+    slider.max = max;
+    slider.step = step;
+    slider.value = val;
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      activeVoice[key] = v;
+      valSpan.textContent = fmt(v);
+    });
+
+    row.appendChild(labelSpan);
+    row.appendChild(slider);
     grid.appendChild(row);
   });
-}
-
-window.liveParam = function(key, rawVal, labelId, _fmtStr) {
-  // Parse value
-  const val = parseFloat(rawVal);
-  activeVoice[key] = val;
-
-  // fmt is serialized; just reconstruct display
-  const fmtMap = {
-    pitch: v => `${Math.round(v)} hz`,
-    jitter: v => `${Math.round(v * 100)}%`,
-    breathiness: v => `${Math.round(v * 100)}%`,
-    vowelDurMult: v => `${parseFloat(v).toFixed(2)}×`,
-  };
-  const fmt = fmtMap[key];
-  if (fmt) document.getElementById(labelId).textContent = fmt(val);
-};
 
 // ── Speak ─────────────────────────────────────────────────────────────────────
 window.speakText = function() {
