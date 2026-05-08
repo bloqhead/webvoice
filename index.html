@@ -28,9 +28,12 @@
   <!-- Input -->
   <div class="panel">
     <span class="panel-label">input</span>
-    <div class="input-row">
-      <input type="text" id="wordInput" placeholder="type something..." maxlength="120" autocomplete="off" spellcheck="false">
-      <button class="speak-btn" id="speakBtn" onclick="speakText()">speak</button>
+    <div class="input-area">
+      <textarea id="wordInput" placeholder="type something... (shift+enter to speak)" rows="1" spellcheck="false" autocomplete="off"></textarea>
+      <div class="input-footer">
+        <span class="char-hint">shift+enter to speak · enter for new line</span>
+        <button class="speak-btn" id="speakBtn">speak</button>
+      </div>
     </div>
   </div>
 
